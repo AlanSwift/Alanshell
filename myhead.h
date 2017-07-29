@@ -5,13 +5,15 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <pwd.h>
-/*********function declare*****/
-void input_prompt();
-int read_command();
-int init();
-int parse_input();
+#include <errno.h>
+#include <signal.h>
+#include <fcntl.h>
+#define _debug
+
+
 
 /********parameter declare*****/
 char *buf;
@@ -19,6 +21,26 @@ char**parameters;
 extern const int MAXLINE;
 extern const int BUFFSIZE;
 extern const int MAXPARA;
+extern const int MAXPID;
+extern char*internal_list[100];
+pid_t *PIDTABLE;
+struct parse_info;
+struct info_node;
+struct parse_info *infolist;
+
+/*********function declare*****/
+void input_prompt();
+int read_command();
+int init();
+int parse_input();
+void init_parse_info(struct parse_info**p);
+void init_info_node(struct info_node**p);
+void destroy_parse_info(struct parse_info*p);
+void signal_handler(int);
+short parsing(int);
+short run_exec();
+short run_command(char*,char**);
+short is_internal_cmd(char*command);
 
 /********color defination******/
 /*********linux only***********/
@@ -46,5 +68,24 @@ extern const int MAXPARA;
 #define true 1
 #define false 0
 //#endif
+
+struct info_node{
+    char*command;
+    char**paramaters;
+    char*inputfile;
+    char*outputfile;
+    int cnt;
+    short input_direct_noappend;
+    short input_direct_append;
+    short output_direct_noappend;
+    short output_direct_append;
+    short piped;
+    struct info_node*next;
+};
+
+struct parse_info{
+    struct info_node*info;
+    int background;
+};
 
 #endif

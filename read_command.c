@@ -83,3 +83,120 @@ int parse_input()
         p_st=p_end;
     }
 }
+short parsing(int n)
+{
+    short ok=0;
+    short in=0;
+    int cnt=0;
+    init_parse_info(&infolist);
+    init_info_node(&(infolist->info));
+    //printf("@@@@@@%d\n",infolist->info->cnt);
+    struct info_node*p=infolist->info;
+    for(int i=0;i<n;i++)
+    {
+        //printf("^^^^:%d %s\n",i,parameters[i]);
+        if(!in)
+        {
+            p->command=parameters[i];
+            p->paramaters[(p->cnt)++]=p->command;
+            p->paramaters[p->cnt]=NULL;
+            in=1;
+        }
+        else{
+            if(strcmp(parameters[i],"|")==0)
+            {
+                if(i==0)
+                {
+                    return -1;
+                }
+                p->piped=1;
+                init_info_node(&(p->next));
+                p=p->next;
+                in=0;
+            }
+            else if(strcmp(parameters[i],"&")==0)
+            {
+                infolist->background=1;
+                if(i!=n-1)
+                {
+                    return -1;
+                }
+                
+            }
+            else if(strcmp(parameters[i],"<")==0)
+            {
+                if(p->input_direct_append==1||p->input_direct_noappend==1)
+                {
+                    i++;
+                    continue;
+                }
+                p->input_direct_noappend=1;
+                if(i>=n-1)
+                {
+                    return -1;
+                }
+                else{
+                    p->inputfile=parameters[i+1];
+                    i+=1;
+                }
+            }
+            else if(strcmp(parameters[i],"<<")==0)
+            {
+                if(p->input_direct_append==1||p->input_direct_noappend==1)
+                {
+                    i++;
+                    continue;
+                }
+                p->input_direct_append=1;
+                if(i>=n-1)
+                {
+                    return -1;
+                }
+                else{
+                    p->inputfile=parameters[i+1];
+                    i+=1;
+                }
+            }
+            else if(strcmp(parameters[i],">")==0)
+            {
+                if(p->output_direct_append==1||p->output_direct_noappend==1)
+                {
+                    i++;
+                    continue;
+                }
+                p->output_direct_noappend=1;
+                if(i>=n-1)
+                {
+                    return -1;
+                }
+                else{
+                    p->outputfile=parameters[i+1];
+                    i++;
+                }
+            }
+            else if(strcmp(parameters[i],">>")==0)
+            {
+                if(p->output_direct_append==1||p->output_direct_noappend==1)
+                {
+                    i++;
+                    continue;
+                }
+                p->output_direct_append=1;
+                if(i>=n-1)
+                {
+                    return -1;
+                }
+                else{
+                    p->outputfile=parameters[i+1];
+                    i++;
+                }
+            }
+            else{
+                p->paramaters[(p->cnt)++]=parameters[i];
+                p->paramaters[p->cnt]=NULL;
+            }
+        }
+    }
+    
+    return 1;
+}
