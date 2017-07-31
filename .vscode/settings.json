@@ -1,5 +1,18 @@
 {
     "files.associations": {
-        "myhead.h": "c"
+        "myhead.h": "c",
+        "string.h": "c",
+        "stdio2.h": "c",
+        "libio.h": "c",
+        "stddef.h": "c",
+        "stdlib.h": "c",
+        "waitflags.h": "c",
+        "stdio.h": "c",
+        "fcntl.h": "c",
+        "fcntl2.h": "c",
+        "unistd.h": "c",
+        "signum.h": "c",
+        "sigcontext.h": "c",
+        "dirent.h": "c"
     }
 }

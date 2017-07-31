@@ -17,4 +17,4 @@ run_exec.o: myhead.h
 	gcc -c run_exec.c
 
 clean:
-	rm main.o init.o prompt.o read_command.o Alanshell
+	rm *.o Alanshell

@@ -26,8 +26,7 @@ void input_prompt()
     char path[max_len_prompt];
     char username[max_len_prompt];
     int uid=1;
-    struct passwd* pwd;
-    pwd=getpwuid(getuid());
+
     
 
     getcwd(path,max_len_prompt);

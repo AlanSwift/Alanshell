@@ -11,8 +11,14 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <assert.h>
+#include <dirent.h> 
+#include <linux/limits.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <grp.h>
+#include <time.h>
 #define _debug
-
 
 
 /********parameter declare*****/
@@ -22,11 +28,19 @@ extern const int MAXLINE;
 extern const int BUFFSIZE;
 extern const int MAXPARA;
 extern const int MAXPID;
+extern const int MAXDIRLIST;
 extern char*internal_list[100];
+extern int row_left;
+extern pid_t fgpid;
+extern char *fgname;
+struct passwd* pwd;
 pid_t *PIDTABLE;
 struct parse_info;
 struct info_node;
 struct parse_info *infolist;
+struct process_info;
+struct process_info *processlist;
+struct process_info *currentprocess;
 
 /*********function declare*****/
 void input_prompt();
@@ -40,7 +54,29 @@ void signal_handler(int);
 short parsing(int);
 short run_exec();
 short run_command(char*,char**);
+int run_single(struct info_node*,int in_fd,int out_fd);
 short is_internal_cmd(char*command);
+short set_path(char*path_cd);
+short exec_pwd();
+short exec_dir(char**);
+short exec_display(char*folder,int flag);
+int exec_displayfile(char*,int flag);
+void perr(char*,char*);
+int getmaxrow();
+int max(int a,int b);
+int min(int a,int b);
+void clear();
+void process_node_init(struct process_info**);
+void list_jobs(char**);
+void readinfo(struct process_info*);
+short iszombis(pid_t pid);
+void cleanprocess();
+short exec_fg();
+void ctrl_z(int sig);
+void addpid(pid_t,struct info_node*p,int state);
+void changestate(pid_t);
+void getname(struct info_node*p);
+short exec_bg();
 
 /********color defination******/
 /*********linux only***********/
@@ -62,11 +98,22 @@ short is_internal_cmd(char*command);
 #define WHITE        "\033[1;37m"
 
 /*******hong*************/
+/*******for dir**********/
+#define PARA_NONE 0
+#define PARA_a 1
+#define PARA_l 2
 
 
 //#ifndef __cplusplus
 #define true 1
 #define false 0
+#define RUNNING 1
+#define STOP 2
+#define FINISH 4
+#define NONSENSE 0
+#define ZOMBIS 3
+#define DO_FG 100
+#define DO_BG 101
 //#endif
 
 struct info_node{
@@ -87,5 +134,11 @@ struct parse_info{
     struct info_node*info;
     int background;
 };
+typedef struct process_info{
+    pid_t pid;
+    int status;
+    char*command;
+    struct process_info*next;
+}pro_node;
 
 #endif

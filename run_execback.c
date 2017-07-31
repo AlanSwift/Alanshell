@@ -3,25 +3,152 @@
 
 short run_exec(struct info_node*p)
 {
-    int status=1;
-    int temp_fd=0;
-    struct info_node*ptr=NULL;
-    for(ptr=p;ptr!=NULL;ptr=ptr->next)
+    int pip_fd[2];
+    int status;
+    int out_fd,in_fd;
+    pipe(pip_fd);
+
+    pid_t child1,child2;
+    printf("pid1:%d\n",getpid());
+    if( (child1=fork()) != 0 )
     {
-        if(ptr->next)
+        //father
+        printf("I AM FATHER\n");
+        
+        fflush(stdout);
+        if(infolist->background==0)
         {
-            int fd[2];
-            pipe(fd);
-            status=run_single(ptr,temp_fd,fd[1]);
-            temp_fd=fd[0];
+            printf("***********FFF");
+            fflush(stdout);
+            //fgpid=child1;
+            fgpid=child1;
+            //signal(SIGCONT,f);
+            currentprocess->pid=child1;
+            
+            //currentprocess
+            int cnt=0;
+            for(int i=0;i<p->cnt;i++)
+            {
+                strcpy(currentprocess->command+cnt,p->paramaters[i]);
+                cnt+=strlen(p->paramaters[i])+1;
+                currentprocess->command[cnt-1]=' ';
+                currentprocess->command[cnt]='\0';
+            }
+            waitpid(child1,&status,WUNTRACED);
+            fgpid=-1;
+            currentprocess->pid=-1;
+            if(WEXITSTATUS(status)==DO_FG)
+            {
+                printf("ggggggg\n");
+                exec_fg();
+            }
         }
         else{
-            status=run_single(ptr,temp_fd,1);
+            int f=0;
+            for(f=0;f<MAXPID;f++)
+            {
+                if(PIDTABLE[f]==0)
+                {
+                    PIDTABLE[f]=child1;
+                    break;
+                }
+            }
+            if(f==MAXPID)
+            {
+                perror("Warning: Process amount limit exist. There are zombis.");
+            }
+            pro_node*pp=processlist;
+            while(pp->next!=NULL)
+            {
+                pp=pp->next;
+            }
+            pp->next=(pro_node*)malloc(sizeof(pro_node));
+            pp->next->next=NULL;
+            pp->next->pid=child1;
+            int cnt=0;
+            for(int i=0;i<p->cnt;i++)
+            {
+                cnt+=(strlen(p->paramaters[i])+1);
+            }
+            pp=pp->next;
+            pp->command=(char*)malloc(sizeof(char)*(cnt+5));
+            cnt=0;
+            for(int i=0;i<p->cnt;i++)
+            {
+                strcpy(pp->command+cnt,p->paramaters[i]);
+                cnt+=strlen(p->paramaters[i])+1;
+                pp->command[cnt-1]=' ';
+                pp->command[cnt]='\0';
+            }
+            printf("pid2:%d\n",getpid());
+            //waitpid(child1,NULL,WNOHANG);
         }
-        printf("******&&&%%%%HHHH\n");
         fflush(stdout);
+        if(p->piped)
+        {
+            printf("PIPIPIPIPIPIP\n");
+            if((child2=fork())==0)
+            {
+                close(pip_fd[1]);
+                close(fileno(stdin));
+                dup2(pip_fd[0],fileno(stdin));
+                close(pip_fd[0]);
+                run_exec(p->next);
+            }
+            else{
+                close(pip_fd[0]);close(pip_fd[1]);
+                if(infolist->background==0)
+                {
+                    waitpid(child2,&status,WUNTRACED);
+                }
+                
+                
+                    //waitpid(child2,&status,0);
+            }
+        }
+        
     }
-    return status;
+    else{//command 1
+        printf("pid son: %d father: %d\n",getpid(),getppid());
+        if(p->input_direct_append||p->input_direct_noappend)
+        {
+            in_fd=open(p->inputfile, O_CREAT |O_RDONLY, 0666);
+            close(fileno(stdin));
+            dup2(in_fd,fileno(stdin));
+            close(in_fd);
+        }
+        if(p->output_direct_append||p->output_direct_noappend)
+        {
+            if(p->output_direct_noappend)
+            {
+                out_fd = open(p->outputfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+            }
+            else{
+                out_fd = open(p->outputfile, O_WRONLY|O_CREAT|O_APPEND, 0666);
+            }
+            
+            dup2(out_fd,fileno(stdout));
+            close(out_fd);
+        }
+        else if(p->piped)
+        {
+            close(pip_fd[0]);
+            close(fileno(stdout));
+            dup2(pip_fd[1],fileno(stdout));
+            close(pip_fd[1]);
+            
+        }
+        //int ff=kill(getppid(),SIGCONT);
+        //printf("%d %d iiiii\n",ff,getppid());
+        //signal(SIGTSTP,f);
+        int fe=run_command(p->command,p->paramaters);
+        printf("***********%d&&&&&****",fe);
+        exit(fe);
+        //execvp(p->command,p->paramaters);
+    }
+
+
+    return 1;
 }
 
 short is_internal_cmd(char*command)
@@ -36,79 +163,9 @@ short is_internal_cmd(char*command)
     return -1;
 }
 
-int run_single(struct info_node*p,int in_fd,int out_fd)
-{
-    int status=1;
-    pid_t childpid;
-    printf("UUUUUUUUU\n");
-    if((childpid=fork())==0)
-    {
-        //children
-        int pid=getpid();
-        signal(SIGINT,SIG_DFL);
-        if(signal(SIGTSTP,ctrl_z)==SIG_ERR)
-        {
-            printf("ERROR\n");
-        }
-        //signal(SIGTSTP,ctrl_z);
-        signal(SIGCONT,SIG_DFL);
-        dup2(in_fd,0);
-        dup2(out_fd,1);
-        if(in_fd!=0)
-        {
-            close(in_fd);
-        }
-        if(out_fd!=1)
-        {
-            close(out_fd);
-        }
-        int re=run_command(p->command,p->paramaters);
-        exit(re);
-    }
-    else{
-        //signal(SIGINT,SIG_IGN);
-        signal(SIGTSTP,ctrl_z);
-        signal(SIGCONT,SIG_DFL);
-        if(infolist->background==1)
-        {
-            //signal(SIGCHLD,SIG_IGN);
-            addpid(childpid,p,RUNNING);
-        }
-        else{
-            fgpid=childpid;
-            waitpid(childpid,&status,WUNTRACED);
-            fgpid=-1;
-            printf("status: %d\n",WEXITSTATUS(status));
-            if(WEXITSTATUS(status)==DO_FG)
-            {
-                exec_fg();
-            }
-            else if(WEXITSTATUS(status)==DO_BG)
-            {
-                printf("DO BG\n");
-                exec_bg();
-            }
-        }
-
-        if(in_fd!=0)
-        {
-            close(in_fd);
-        }
-        if(out_fd!=1)
-        {
-            close(out_fd);
-        }
-    }
-    return 1;
-}
-
-
-
 short run_command(char* command,char**para)
 {
-    
     int re=is_internal_cmd(command);
-    printf("RUNNING CMD:%d\n",re);
     if(re==-1)
     {
         //out
@@ -156,45 +213,21 @@ short run_command(char* command,char**para)
     }
     else if(re==6)//fg
     {
-        printf("FFF\n");
         return DO_FG;
-    }
-    else if(re==7)//bg
-    {
-        return DO_BG;
     }
     
     return -1;
-}
-
-short exec_bg()
-{
-    pro_node*p=processlist;
-    while(p->next!=NULL)
-    {
-        //readinfo(p->next);
-        if(p->next->status==STOP)
-        {
-            pid_t pid=p->next->pid;
-            kill(pid,SIGCONT);
-            p->next->status=RUNNING;
-        }
-        if(p->next!=NULL)
-            p=p->next;
-    }
-    return 0;
 }
 
 short exec_fg()
 {
     //waitpid(processlist->next->pid,NULL,0);
     //return 0;
-    printf("IN FG\n");
     DIR*dir;
     pro_node*p=processlist;
     while(p->next!=NULL)
     {
-        //readinfo(p->next);
+        readinfo(p->next);
         if(p->next->status==RUNNING)
         {
             for(int i=0;i<MAXPID;i++)
@@ -213,19 +246,33 @@ short exec_fg()
 
             pro_node*pt=p->next;
             p->next=p->next->next;
-
+            currentprocess->pid=pt->pid;
+            strcpy(currentprocess->command,pt->command);
             free(pt->command);
             free(pt);
-
+            printf("%d\n",pid);
+            fflush(stdout);
             fgpid=pid;
             waitpid(pid,NULL,WUNTRACED);
+            currentprocess->pid=-1;
             fgpid=-1;
 
+
+
+            /*dir=opendir(buf);
+            while(dir)
+            {
+                dir=opendir(buf);
+                usleep(100000);
+                //for(int i=0;i<10000000;i++);
+            }*/
+
+            //printf("%d***\n",fff);
+            //return 0;
         }
         if(p->next!=NULL)
             p=p->next;
     }
-    return 0;
 }
 
 void cleanprocess()

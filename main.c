@@ -10,6 +10,7 @@ int main()
     /***********define parameter*******/
 
     /***********define parameter*******/
+    int in_fd,outfd;
 
     if(!init())
     {
@@ -21,14 +22,27 @@ int main()
         printf("signal error.\n");
         return -1;
     }
+    /*
+    if(signal(SIGTSTP,ctrl_z)==SIG_ERR)
+    {
+        printf("signal error....\n");
+        return -1;
+    }*/
 
     printf("-------Myshell---------\n");
 
     while(1)
     {
+        /*in_fd=open("/dev/tty", O_CREAT |O_RDONLY, 0666);
+        close(fileno(stdin));
+        dup2(in_fd,fileno(stdin));
+        close(in_fd);*/
+        freopen("/dev/tty","r",stdin);
+        freopen( "/dev/tty", "w", stdout );
+
         input_prompt();
         int re=read_command();
-        printf("*****\n");
+        //printf("*****ininin\n");
         if(re==-1)
         {
             printf("Input error!\n");
@@ -76,9 +90,10 @@ int main()
                 }
 
                 #endif
+                printf("#########\n");
                 run_exec(infolist->info);
             }
         }
-        return 0;
+        //return 0;
     }
 }
