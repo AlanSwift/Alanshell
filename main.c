@@ -1,15 +1,16 @@
 #include "myhead.h"
-
 static char* get_path()
 {
 
 }
 
-int main()
+int main(int argc,char**argv)
 {
     /***********define parameter*******/
 
     /***********define parameter*******/
+    printf("%d %s\n",argc,argv[0]);
+    init_environment(argc,argv);
     int in_fd,outfd;
 
     if(!init())

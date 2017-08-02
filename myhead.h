@@ -18,6 +18,7 @@
 #include <sys/ioctl.h>
 #include <grp.h>
 #include <time.h>
+#include "myavl.h"
 #define _debug
 
 
@@ -33,6 +34,8 @@ extern char*internal_list[100];
 extern int row_left;
 extern pid_t fgpid;
 extern char *fgname;
+extern char** environ;
+extern AVLTree valueables;
 struct passwd* pwd;
 pid_t *PIDTABLE;
 struct parse_info;
@@ -63,8 +66,7 @@ short exec_display(char*folder,int flag);
 int exec_displayfile(char*,int flag);
 void perr(char*,char*);
 int getmaxrow();
-int max(int a,int b);
-int min(int a,int b);
+
 void clear();
 void process_node_init(struct process_info**);
 void list_jobs(char**);
@@ -77,6 +79,18 @@ void addpid(pid_t,struct info_node*p,int state);
 void changestate(pid_t);
 void getname(struct info_node*p);
 short exec_bg();
+short exec_time();
+short exec_umask(char**);
+short exec_environ();
+short exec_set(char**);
+short exec_unset(char**);
+short exec_test(char**);
+short test_dir(char*filename);
+short test_file(char*filename,int flag);
+void init_environment(int argc,char**argv);
+short exec_shift(char **);
+short exec_echo(char**);
+
 
 /********color defination******/
 /*********linux only***********/
@@ -112,8 +126,25 @@ short exec_bg();
 #define FINISH 4
 #define NONSENSE 0
 #define ZOMBIS 3
+#define DO_JOBS 97
+#define DO_UNSET 98
+#define DO_SET 99
 #define DO_FG 100
 #define DO_BG 101
+#define DO_SHIFT 102
+#define TESTr 0
+#define TESTw 1
+#define TESTx 2
+#define TESTs 3
+#define TESTe 4
+#define TESTf 5
+#define TESTh 6
+#define TESTL 7
+#define TESTc 8
+#define TESTb 9
+#define TESTp 10
+#define FEXIST 0
+#define FNOTEXIST 1
 //#endif
 
 struct info_node{

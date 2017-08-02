@@ -50,7 +50,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
         {
             printf("ERROR\n");
         }
-        //signal(SIGTSTP,ctrl_z);
+        signal(SIGTSTP,SIG_IGN);
         signal(SIGCONT,SIG_DFL);
         dup2(in_fd,0);
         dup2(out_fd,1);
@@ -63,6 +63,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             close(out_fd);
         }
         int re=run_command(p->command,p->paramaters);
+        printf("re: %d",re);
         exit(re);
     }
     else{
@@ -72,6 +73,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
         if(infolist->background==1)
         {
             //signal(SIGCHLD,SIG_IGN);
+            //signal(SIGTSTP,SIG_IGN);
             addpid(childpid,p,RUNNING);
         }
         else{
@@ -79,14 +81,38 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             waitpid(childpid,&status,WUNTRACED);
             fgpid=-1;
             printf("status: %d\n",WEXITSTATUS(status));
+
             if(WEXITSTATUS(status)==DO_FG)
             {
+                printf("IS FG");
                 exec_fg();
             }
             else if(WEXITSTATUS(status)==DO_BG)
             {
                 printf("DO BG\n");
                 exec_bg();
+            }
+            else if(WEXITSTATUS(status)==DO_SET)
+            {
+                exec_set((p->paramaters)+1);
+            }
+            else if(WEXITSTATUS(status)==DO_UNSET)
+            {
+                exec_unset((p->paramaters)+1);
+            }
+            else if(WEXITSTATUS(status)==DO_SHIFT)
+            {
+                exec_shift((p->paramaters)+1);
+            }
+            else if(WEXITSTATUS(status)==DO_JOBS)
+            {
+                list_jobs((p->paramaters)+1);
+                cleanprocess();
+                if(processlist->next!=NULL)
+                {
+                    printf("shit\n");
+                }
+                
             }
         }
 
@@ -146,27 +172,385 @@ short run_command(char* command,char**para)
     }
     else if(re==5)//jobs
     {
-        list_jobs(para+1);
-        cleanprocess();
-        if(processlist->next!=NULL)
-        {
-            printf("shit\n");
-        }
-        return 0;
+        
+        return DO_JOBS;
     }
     else if(re==6)//fg
     {
         printf("FFF\n");
-        return DO_FG;
+        exit(DO_FG);
     }
     else if(re==7)//bg
     {
         return DO_BG;
     }
+    else if(re==8)//time
+    {
+        return exec_time();
+    }
+    else if(re==9)//umask
+    {
+        return exec_umask(para+1);
+    }
+    else if(re==10)//environ
+    {
+        return exec_environ();
+    }
+    else if(re==11)//set
+    {
+        return DO_SET;
+    }
+    else if(re==12)//unset
+    {
+        return DO_UNSET;
+    }
+    else if(re==13)//exec
+    {
+        return execvp(command,para);
+    }
+    else if(re==14)//test
+    {
+        return exec_test(para+1);
+    }
+    else if(re==15)//shift
+    {
+        return DO_SHIFT;
+    }
     
     return -1;
 }
 
+short exec_shift(char**para)
+{
+    int n=0;
+    if(para[0]==NULL)
+    {
+        n=1;
+    }
+    else{
+        n=atoi(para[0]);
+        if(n<0)
+        {
+            perror("shift: index out of bound.");
+            return 1;
+        }
+    }
+    if(n==0)
+    {
+        return 0;
+    }
+    char * old=getenv("#");
+    int cntold=atoi(old);
+    char buf[100];
+    printf("%d %d\n",cntold,n);
+    for(int i=1;i<=cntold-n;i++)
+    {
+        sprintf(buf,"%d",i+n);
+        char*oldvalue=getenv(buf);
+        sprintf(buf,"%d",i);
+        setenv(buf,oldvalue,1);
+    }
+    for(int i=max(1,cntold-n+1);i<=cntold;i++)
+    {
+        sprintf(buf,"%d",i);
+        setenv(buf,"NULL",1);
+    }
+    sprintf(buf,"%d",max(0,cntold-n));
+    setenv("#",buf,1);
+    return 0;
+
+}
+
+short test_dir(char*filename)
+{
+    DIR*dir=NULL;
+    struct stat dir_info;
+    struct dirent*dirp=NULL;
+    char*path_more=(char*)malloc(sizeof(char)*1000);
+    if(filename==NULL)
+    {
+        return false;
+    }
+    if(filename[0]!='/'&&filename[0]!='~')
+    {
+        getcwd(path_more,1000);
+        int len=strlen(path_more);
+        path_more[len]='/';
+        path_more[len+1]='\0';
+        len++;
+        strcpy(path_more+len,filename);
+        printf("%s",path_more);
+    }
+    else if(filename[0]=='~')
+    {
+        strcpy(path_more,pwd->pw_dir);
+        strcpy(path_more+strlen(pwd->pw_dir),filename+1);
+    }
+    else{
+        strcpy(path_more,filename);
+    }
+    if(stat(path_more,&dir_info)==-1)
+    {
+        return false;
+    }
+    else{
+        if(S_ISDIR(dir_info.st_mode))
+        {
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+}
+short test_file(char*filename,int flag)
+{
+    DIR*dir=NULL;
+    struct stat dir_info;
+    struct dirent*dirp=NULL;
+    char*path_more=(char*)malloc(sizeof(char)*1000);
+    if(filename==NULL)
+    {
+        return FNOTEXIST;
+    }
+    if(filename[0]!='/'&&filename[0]!='~')
+    {
+        getcwd(path_more,1000);
+        int len=strlen(path_more);
+        path_more[len]='/';
+        path_more[len+1]='\0';
+        len++;
+        strcpy(path_more+len,filename);
+        printf("%s",path_more);
+    }
+    else if(filename[0]=='~')
+    {
+        strcpy(path_more,pwd->pw_dir);
+        strcpy(path_more+strlen(pwd->pw_dir),filename+1);
+    }
+    else{
+        strcpy(path_more,filename);
+    }
+    if(lstat(path_more,&dir_info)==-1)
+    {
+        return FNOTEXIST;
+    }
+    else{
+        switch(flag)
+        {
+            case TESTf:
+            {
+                if(S_ISREG(dir_info.st_mode))
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+                break;
+            }
+            case TESTr:
+            {
+                if(access(path_more,R_OK)==0)
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTw: 
+            {
+                if(access(path_more,W_OK)==0)
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTx: 
+            {
+                if(access(path_more,X_OK)==0)
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTe: 
+            {
+                return FEXIST;
+            }
+            case TESTh: case TESTL:
+            {
+                if(S_ISLNK(dir_info.st_mode))
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTc: 
+            {
+                if(S_ISCHR(dir_info.st_mode))
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTb: 
+            {
+                if(S_ISBLK(dir_info.st_mode))
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+            }
+            case TESTp: 
+            {
+                if(S_ISFIFO(dir_info.st_mode))
+                {
+                    return FEXIST;
+                }
+                else{
+                    return FNOTEXIST;
+                }
+
+            }
+            default: 
+            {
+                perror("Test: Parameters are not supported.");
+                return FNOTEXIST;
+            }
+        }
+    }
+}
+
+short exec_test(char**para)
+{
+    printf("111111 %s %s",para[0],para[1]);
+    if(para[0][0]=='-')
+    {
+        //printf("in")
+        switch(para[0][1])
+        {
+            case 'd':
+            {
+                return test_dir(para[1]);
+                break;
+            }
+            case 'r':
+            {
+                return test_file(para[1],TESTr);
+            }
+            case 'w': 
+            {
+                return test_file(para[1],TESTw);
+            }
+            case 'x': 
+            {
+                return test_file(para[1],TESTx);
+            }
+            case 'e': 
+            {
+                return test_file(para[1],TESTe);
+            }
+            case 'L':case 'h':
+            {
+                return test_file(para[1],TESTL);
+            }
+            case 'p': 
+            {
+                return test_file(para[1],TESTp);
+            }
+            case 'f': 
+            {
+                return test_file(para[1],TESTf);
+            }
+            case 'c': 
+            {
+                return test_file(para[1],TESTc);
+            }
+            case 'b': 
+            {
+                return test_file(para[1],TESTb);
+            }
+            default: 
+            {
+                perror("Test: Parameters are not supported.");
+                return FNOTEXIST;
+            }
+        }
+    }
+}
+
+short exec_environ()
+{
+    for(int i=0;environ[i]!=NULL;i++)
+    {
+        printf("%s\n",environ[i]);
+    }
+    return 0;
+}
+
+short exec_set(char**parameters)
+{
+    if(parameters[0]==NULL)
+    {
+        return exec_environ();
+    }
+    else if(parameters[1]==NULL)
+    {
+        return setenv(parameters[0],"NULL",0);
+    }
+    else
+    {
+        return setenv(parameters[0],parameters[1],0);
+    }
+}
+
+short exec_unset(char**parameters)
+{
+    if(parameters[0]!=NULL)
+    {
+        return unsetenv(parameters[0]);
+    }
+    return -1;
+}
+
+short exec_umask(char**parameters)
+{
+    mode_t new_umask=0666,old_umask;
+    old_umask=umask(new_umask);
+    if(parameters[0]==NULL)
+    {
+        printf("%04o\n",old_umask);
+        umask(old_umask);
+    }
+    else{
+        new_umask=strtoul(parameters[0],0,8);
+        printf("%04o\n",new_umask);
+        umask(new_umask);
+    }
+    return 0;
+}
+
+short exec_time()
+{
+    time_t now;
+    struct tm*time_now;
+    time(&now);
+    time_now=localtime(&now);
+    printf("%s",asctime(time_now));
+    return 0;
+}
 short exec_bg()
 {
     pro_node*p=processlist;

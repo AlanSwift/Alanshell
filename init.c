@@ -4,18 +4,11 @@ const int BUFFSIZE=1024;
 const int MAXPARA=1024;
 const int MAXPID=512;
 const int MAXDIRLIST=100;
-char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg"};
+char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg","time","umask","environ","set","unset","exec","test","shift"};
 char *fgname;
 int row_left;
 pid_t fgpid=-1;
-int max(int a,int b)
-{
-    return a>b?a:b;
-}
-int min(int a,int b)
-{
-    return a<b?a:b;
-}
+AVLTree valueables;
 short iszombis(pid_t pid)
 {
     DIR*dir=NULL;
@@ -71,7 +64,7 @@ void ctrl_z(int sig)
         return;
     }
     else{
-        if(kill(fgpid,SIGTSTP)==0)
+        if(kill(fgpid,SIGSTOP)==0)
         {
             addpid(fgpid,NULL,STOP);
             int i;
@@ -242,6 +235,19 @@ int getmaxrow()
     ioctl(STDIN_FILENO,TIOCGWINSZ,&size);
     return size.ws_row;
 }
+
+void init_environment(int argc,char**argv)
+{
+    char buf[100];
+    sprintf(buf,"%d",argc-1);
+    setenv("#",buf,0);
+    for(int i=0;i<argc;i++)
+    {
+        sprintf(buf,"%d",i);
+        setenv(buf,argv[i],0);
+    }
+}
+
 int init()
 {
     row_left=getmaxrow();
@@ -269,6 +275,7 @@ int init()
     process_node_init(&currentprocess);
     currentprocess->command=(char*)malloc(sizeof(char)*1000);
     fgname=(char*)malloc(sizeof(char)*1000);
+    
     return 1;
 }
 void init_parse_info(struct parse_info**p)
