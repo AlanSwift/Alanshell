@@ -19,6 +19,8 @@
 #include <grp.h>
 #include <time.h>
 #include "myavl.h"
+#include <ctype.h>
+
 #define _debug
 
 
@@ -90,6 +92,7 @@ short test_file(char*filename,int flag);
 void init_environment(int argc,char**argv);
 short exec_shift(char **);
 short exec_echo(char**);
+char* replace_string(char*);
 
 
 /********color defination******/

@@ -4,7 +4,7 @@ const int BUFFSIZE=1024;
 const int MAXPARA=1024;
 const int MAXPID=512;
 const int MAXDIRLIST=100;
-char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg","time","umask","environ","set","unset","exec","test","shift"};
+char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg","time","umask","environ","set","unset","exec","test","shift","echo"};
 char *fgname;
 int row_left;
 pid_t fgpid=-1;

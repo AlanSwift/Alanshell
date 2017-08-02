@@ -112,7 +112,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
                 {
                     printf("shit\n");
                 }
-                
+
             }
         }
 
@@ -216,8 +216,210 @@ short run_command(char* command,char**para)
     {
         return DO_SHIFT;
     }
+    else if(re==16)//echo
+    {
+        return exec_echo(para+1);
+    }
     
     return -1;
+}
+
+char* replace_string(char*p)
+{
+    int cntall=0;
+    int size=100;
+    char*res=(char*)malloc(sizeof(char)*size);
+    memset(res,0,sizeof(char)*size);
+    int indouble=0;
+    int insingle=0;
+    int indollar=0;
+    int hasquote=0;
+    char bufsize=100;
+    char*buf=(char*)malloc(sizeof(char)*bufsize);
+    int cnt=0;
+    //printf("^^^^^^^^^^^^ %s ^^^^^^^^^^^\n",p);
+    int len=strlen(p);
+    for(int i=0;i<len;i++)
+    {
+        if(indollar)
+        {
+            //printf("%c$$$$$\n",p[i]);
+            if(p[i]=='{'&&!hasquote)
+            {
+                hasquote=1;
+            }
+            else if(isalnum(p[i]))
+            {
+                //printf("%c^^^^\n",p[i]);
+                if(cnt+1>=bufsize)
+                {
+                    bufsize<<=1;
+                    char*old=buf;
+                    buf=(char*)malloc(sizeof(char)*bufsize);
+                    strcpy(buf,old);
+                    free(old);
+                }
+                buf[cnt++]=p[i];
+            }
+            else if(p[i]=='}')
+            {
+                if(hasquote)
+                {
+                    indollar=0;
+                    hasquote=0;
+                    buf[cnt]='\0';
+                    char*value=getenv(buf);
+                    if(value!=NULL)
+                    {
+                        int cnt_1=cntall+strlen(value);
+                        if(cnt_1>=size)
+                        {
+                            size=cnt_1*2;
+                            char*old=res;
+                            res=(char*)malloc(sizeof(char)*size);
+                            strcpy(res,old);
+                            free(old);
+                        }
+                        strcpy(res+cntall,value);
+                        cntall=strlen(res);
+                    }
+                    cnt=0;
+                }
+                else{
+                    free(buf);
+                    return NULL;
+                }
+            }
+            else if(hasquote)
+            {
+                if(cnt+1>=bufsize)
+                {
+                    bufsize<<=1;
+                    char*old=buf;
+                    buf=(char*)malloc(sizeof(char)*bufsize);
+                    strcpy(buf,old);
+                    free(old);
+                }
+                buf[cnt++]=p[i];
+            }
+            else{
+                indollar=0;
+                hasquote=0;
+                buf[cnt]='\0';
+                char*value=getenv(buf);
+                if(value!=NULL)
+                {
+                    int cnt_1=cntall+strlen(value);
+                    if(cnt_1>=size)
+                    {
+                        size=cnt_1*2;
+                        char*old=res;
+                        res=(char*)malloc(sizeof(char)*size);
+                        strcpy(res,old);
+                        free(old);
+                    }
+                    strcpy(res+cntall,value);
+                    cntall=strlen(res);
+                }
+                cnt=0;
+            }
+        }
+        else if(p[i]=='\'')
+        {
+            insingle=!insingle;
+        }
+        else if(insingle)
+        {
+            int cnt_1=cntall+1;
+            if(cnt_1>=size)
+            {
+                size=cnt_1*2;
+                char*old=res;
+                res=(char*)malloc(sizeof(char)*size);
+                strcpy(res,old);
+                free(old);
+            }
+            res[cntall++]=p[i];
+        }
+        else if(p[i]=='\"')
+        {
+            indouble=!indouble;
+        }
+        else if(p[i]=='$')
+        {
+            indollar=1;
+        }
+        else if(p[i]=='{'&&i>=1&&p[i-1]=='$')
+        {
+            hasquote=1;
+        }
+        else{
+            int cnt_1=cntall+1;
+            if(cnt_1>=size)
+            {
+                size=cnt_1*2;
+                char*old=res;
+                res=(char*)malloc(sizeof(char)*size);
+                strcpy(res,old);
+                free(old);
+            }
+            res[cntall++]=p[i];
+        }
+    }
+    if(indollar)
+    {
+        buf[cnt]='\0';
+        char*value=getenv(buf);
+        if(value!=NULL)
+        {
+            int cnt_1=cntall+strlen(value);
+            if(cnt_1>=size)
+            {
+                size=cnt_1*2;
+                char*old=res;
+                res=(char*)malloc(sizeof(char)*size);
+                strcpy(res,old);
+                free(old);
+            }
+            strcpy(res+cntall,value);
+            cntall=strlen(res);
+        }
+    }
+    //printf("echo:: %s\n",res);
+    return res;
+}
+
+short exec_echo(char**para)
+{
+    int ok=1;
+    for(int i=0;para[i]!=NULL;i++)
+    {
+        char *p=replace_string(para[i]);
+        if(p==NULL)
+        {
+            ok=0;
+            continue;
+        }
+        else{
+            printf("%s",p);
+            free(p);
+            if(para[i+1]!=NULL)
+            {
+                printf(" ");
+            }
+            else{
+                printf("\n");
+            }
+        }
+    }
+    if(ok)
+    {
+        return 0;
+    }
+    else{
+        perror("echo: Input error.");
+        return 1;
+    }
 }
 
 short exec_shift(char**para)
