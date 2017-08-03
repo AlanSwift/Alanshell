@@ -4,7 +4,7 @@ const int BUFFSIZE=1024;
 const int MAXPARA=1024;
 const int MAXPID=512;
 const int MAXDIRLIST=100;
-char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg","time","umask","environ","set","unset","exec","test","shift","echo"};
+char*internal_list[]={"cd","pwd","exit","dir","clear","jobs","fg","bg","time","umask","environ","set","unset","exec","test","shift","echo","help","continue","declare","let"};
 char *fgname;
 int row_left;
 pid_t fgpid=-1;
@@ -42,10 +42,6 @@ void signal_handler(int sig)
         {  
             printf("child process revoked. pid[%6d], exit code[%d]\n",pid,WEXITSTATUS(status));
             changestate(pid);
-            if(WEXITSTATUS(status)==DO_FG)
-            {
-                exec_fg();
-            }
         }  
         else  
             printf("child process revoked.but ...\n");  
@@ -55,10 +51,6 @@ void signal_handler(int sig)
 void ctrl_z(int sig)
 {
     printf("press %d\n",fgpid);
-    //system("pause");
-    
-    //sleep(10);
-    //raise(SIGTSTP);
     if(fgpid==-1)
     {
         return;
@@ -238,14 +230,43 @@ int getmaxrow()
 
 void init_environment(int argc,char**argv)
 {
+    //********init $0-9*******//
     char buf[100];
     sprintf(buf,"%d",argc-1);
-    setenv("#",buf,0);
+    setenv("#",buf,1);
     for(int i=0;i<argc;i++)
     {
         sprintf(buf,"%d",i);
-        setenv(buf,argv[i],0);
+        setenv(buf,argv[i],1);
     }
+    //*******init $?*********//
+    setenv("?","0",1);
+
+    //*********set PATH******//
+    char*path=getenv("PATH");
+    //printf("PATH: %s\n",path);
+    int cntbytes=strlen(path);
+    char*curr=(char*)malloc(sizeof(char)*1000);
+    getcwd(curr,1000);
+    cntbytes+=strlen(curr);
+    cntbytes+=strlen("/myshell");
+    cntbytes+=5;
+    char*new_path=(char*)malloc(sizeof(char)*cntbytes);
+    cntbytes=0;
+    strcpy(new_path,path);
+    cntbytes=strlen(new_path);
+    strcpy(new_path+cntbytes,":");
+    cntbytes=strlen(new_path);
+    strcpy(new_path+cntbytes,curr);
+    cntbytes=strlen(new_path);
+    setenv("PATH",new_path,1);
+    path=getenv("PATH");
+    //printf("PATH: %s\n",path);
+    free(new_path);
+    //*********add MYSHELL******//
+    strncat(curr,"/Alanshell",strlen("/Alanshell"));
+    setenv("ALANSHELL",curr,1);
+    free(curr);
 }
 
 int init()

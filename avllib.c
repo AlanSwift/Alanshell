@@ -259,6 +259,5 @@ AVLTree double_rotate_with_left(AVLTree k3)
 AVLTree double_rotate_with_right(AVLTree k1)
 {
     k1->right=single_rotate_with_left(k1->right);
-    printf("&&&&&&:%s\n",k1->right->key);
     return single_rotate_with_right(k1);
 }

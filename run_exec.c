@@ -3,24 +3,46 @@
 
 short run_exec(struct info_node*p)
 {
-    int status=1;
+    int status=0;//0 is ok, 1 is slight error, 2 is serious error
     int temp_fd=0;
     struct info_node*ptr=NULL;
+    int laststatus=0;
     for(ptr=p;ptr!=NULL;ptr=ptr->next)
     {
         if(ptr->next)
         {
             int fd[2];
             pipe(fd);
-            status=run_single(ptr,temp_fd,fd[1]);
+            int re=run_single(ptr,temp_fd,fd[1]);
+            laststatus=re;
             temp_fd=fd[0];
+            if(re==DO_EXIT)
+            {
+                return DO_EXIT;
+            }
+            else if(re>status)
+            {
+                status=re;
+            }
         }
         else{
-            status=run_single(ptr,temp_fd,1);
+            int re=run_single(ptr,temp_fd,1);
+            laststatus=re;
+            if(re==DO_EXIT)
+            {
+                return DO_EXIT;
+            }
+            else if(re>status)
+            {
+                status=re;
+            }
         }
-        printf("******&&&%%%%HHHH\n");
+
         fflush(stdout);
     }
+    char buf[65];
+    sprintf(buf,"%d",laststatus);
+    setenv("?",buf,1);
     return status;
 }
 
@@ -40,16 +62,10 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
 {
     int status=1;
     pid_t childpid;
-    printf("UUUUUUUUU\n");
     if((childpid=fork())==0)
     {
-        //children
         int pid=getpid();
         signal(SIGINT,SIG_DFL);
-        if(signal(SIGTSTP,ctrl_z)==SIG_ERR)
-        {
-            printf("ERROR\n");
-        }
         signal(SIGTSTP,SIG_IGN);
         signal(SIGCONT,SIG_DFL);
         dup2(in_fd,0);
@@ -63,57 +79,104 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             close(out_fd);
         }
         int re=run_command(p->command,p->paramaters);
-        printf("re: %d",re);
         exit(re);
     }
     else{
-        //signal(SIGINT,SIG_IGN);
         signal(SIGTSTP,ctrl_z);
         signal(SIGCONT,SIG_DFL);
         if(infolist->background==1)
         {
-            //signal(SIGCHLD,SIG_IGN);
-            //signal(SIGTSTP,SIG_IGN);
             addpid(childpid,p,RUNNING);
         }
         else{
             fgpid=childpid;
             waitpid(childpid,&status,WUNTRACED);
             fgpid=-1;
-            printf("status: %d\n",WEXITSTATUS(status));
-
             if(WEXITSTATUS(status)==DO_FG)
             {
-                printf("IS FG");
-                exec_fg();
+                if(p->paramaters[1]==NULL)
+                {
+                    exec_fg(-1);
+                    return 0;
+                }
+                for(int i=1;p->paramaters[i]!=NULL;i++)
+                {
+                    if(test_num(p->paramaters[i])!=0)
+                    {
+                        perror("fg: Can't recognize the parameters.");
+                        return 2;
+                    }
+                    else{
+                        int mypid=atoi(p->paramaters[i]);
+                        if(mypid<0)
+                        {
+                            perror("fg: Pid error.");
+                        }
+                        exec_fg(mypid);
+                    }
+                }
+                return 0;
             }
             else if(WEXITSTATUS(status)==DO_BG)
             {
-                printf("DO BG\n");
-                exec_bg();
+                if(p->paramaters[1]==NULL)
+                {
+                    exec_bg(-1);
+                    return 0;
+                }
+                for(int i=1;p->paramaters[i]!=NULL;i++)
+                {
+                    if(test_num(p->paramaters[i])!=0)
+                    {
+                        perror("bg: Can't recognize the parameters.");
+                        return 2;
+                    }
+                    else{
+                        int mypid=atoi(p->paramaters[i]);
+                        if(mypid<0)
+                        {
+                            perror("bg: Pid error.");
+                        }
+                        exec_bg(mypid);
+                    }
+                }
+                return 0;
             }
             else if(WEXITSTATUS(status)==DO_SET)
             {
-                exec_set((p->paramaters)+1);
+                return exec_set((p->paramaters)+1);
             }
             else if(WEXITSTATUS(status)==DO_UNSET)
             {
-                exec_unset((p->paramaters)+1);
+                return exec_unset((p->paramaters)+1);
             }
             else if(WEXITSTATUS(status)==DO_SHIFT)
             {
-                exec_shift((p->paramaters)+1);
+                return exec_shift((p->paramaters)+1);
             }
             else if(WEXITSTATUS(status)==DO_JOBS)
             {
                 list_jobs((p->paramaters)+1);
                 cleanprocess();
-                if(processlist->next!=NULL)
-                {
-                    printf("shit\n");
-                }
-
+                return 0;
             }
+            else if(WEXITSTATUS(status)==DO_EXIT)
+            {
+                return DO_EXIT;
+            }
+            else if(WEXITSTATUS(status)==DO_CONTINUE)
+            {
+                return DO_CONTINUE;
+            }
+            else if(WEXITSTATUS(status)==DO_DECLARE)
+            {
+                return exec_declare((p->paramaters)+1);
+            }
+            else if(WEXITSTATUS(status)==DO_LET)
+            {
+                return exec_let((p->paramaters)+1);
+            }
+            return WEXITSTATUS(status);
         }
 
         if(in_fd!=0)
@@ -125,7 +188,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             close(out_fd);
         }
     }
-    return 1;
+    return 0;
 }
 
 
@@ -134,7 +197,6 @@ short run_command(char* command,char**para)
 {
     
     int re=is_internal_cmd(command);
-    printf("RUNNING CMD:%d\n",re);
     if(re==-1)
     {
         //out
@@ -159,7 +221,7 @@ short run_command(char* command,char**para)
     }
     else if(re==2)//exit
     {
-
+        return DO_EXIT;
     }
     else if(re==3)//dir
     {
@@ -172,12 +234,10 @@ short run_command(char* command,char**para)
     }
     else if(re==5)//jobs
     {
-        
         return DO_JOBS;
     }
     else if(re==6)//fg
     {
-        printf("FFF\n");
         exit(DO_FG);
     }
     else if(re==7)//bg
@@ -220,8 +280,63 @@ short run_command(char* command,char**para)
     {
         return exec_echo(para+1);
     }
+    else if(re==17)
+    {
+        return exec_help();
+    }
+    else if(re==18)
+    {
+        return exec_continue();
+    }
+    else if(re==19)
+    {
+        return DO_DECLARE;
+    }
+    else if(re==20)
+    {
+        return DO_LET;
+    }
     
-    return -1;
+    return 1;
+}
+short exec_declare(char**para)
+{
+    for(int i=0;para[i]!=NULL;i++)
+    {
+        if(Find(para[i],valueables)==NULL)
+        {
+            valueables=Insert(para[i],"",valueables);
+        }
+    }
+    return 0;
+}
+short exec_let(char**para)//only support assignment...for the sake of time. I will add the expression later.
+{
+    if(strcmp(para[1],"=")!=0||para[0]==NULL||para[2]==NULL)
+    {
+        perror("let: This expression is not supported.");
+        return 1;
+    }
+    position p=Find(para[0],valueables);
+    if(p==NULL)
+    {
+        valueables=Insert(para[0],para[2],valueables);
+        return 0;
+    }
+    else{
+        return UpdateAVL(para[0],para[2],valueables);
+    }
+}
+
+short exec_continue()
+{
+    return DO_CONTINUE;
+}
+
+short exec_help()
+{
+    char*cmd[]={"more","readme"};
+    return execvp(cmd[0],cmd);
 }
 
 char* replace_string(char*p)
@@ -243,14 +358,12 @@ char* replace_string(char*p)
     {
         if(indollar)
         {
-            //printf("%c$$$$$\n",p[i]);
             if(p[i]=='{'&&!hasquote)
             {
                 hasquote=1;
             }
-            else if(isalnum(p[i]))
+            else if(isalnum(p[i])||p[i]=='?'||p[i]=='#')
             {
-                //printf("%c^^^^\n",p[i]);
                 if(cnt+1>=bufsize)
                 {
                     bufsize<<=1;
@@ -321,6 +434,23 @@ char* replace_string(char*p)
                     strcpy(res+cntall,value);
                     cntall=strlen(res);
                 }
+                else{
+                    position p=Find(buf,valueables);
+                    if(p!=NULL)
+                    {
+                        int cnt_1=cntall+strlen(p->value);
+                        if(cnt_1>=size)
+                        {
+                            size=cnt_1*2;
+                            char*old=res;
+                            res=(char*)malloc(sizeof(char)*size);
+                            strcpy(res,old);
+                            free(old);
+                        }
+                        strcpy(res+cntall,p->value);
+                        cntall=strlen(res);
+                    }
+                }
                 cnt=0;
             }
         }
@@ -383,6 +513,23 @@ char* replace_string(char*p)
             }
             strcpy(res+cntall,value);
             cntall=strlen(res);
+        }
+        else{
+            position p=Find(buf,valueables);
+            if(p!=NULL)
+            {
+                int cnt_1=cntall+strlen(p->value);
+                if(cnt_1>=size)
+                {
+                    size=cnt_1*2;
+                    char*old=res;
+                    res=(char*)malloc(sizeof(char)*size);
+                    strcpy(res,old);
+                    free(old);
+                }
+                strcpy(res+cntall,p->value);
+                cntall=strlen(res);
+            }
         }
     }
     //printf("echo:: %s\n",res);
@@ -513,7 +660,7 @@ short test_file(char*filename,int flag)
     char*path_more=(char*)malloc(sizeof(char)*1000);
     if(filename==NULL)
     {
-        return FNOTEXIST;
+        return 1;
     }
     if(filename[0]!='/'&&filename[0]!='~')
     {
@@ -523,7 +670,6 @@ short test_file(char*filename,int flag)
         path_more[len+1]='\0';
         len++;
         strcpy(path_more+len,filename);
-        printf("%s",path_more);
     }
     else if(filename[0]=='~')
     {
@@ -535,7 +681,7 @@ short test_file(char*filename,int flag)
     }
     if(lstat(path_more,&dir_info)==-1)
     {
-        return FNOTEXIST;
+        return 1;
     }
     else{
         switch(flag)
@@ -544,10 +690,10 @@ short test_file(char*filename,int flag)
             {
                 if(S_ISREG(dir_info.st_mode))
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
                 break;
             }
@@ -555,81 +701,81 @@ short test_file(char*filename,int flag)
             {
                 if(access(path_more,R_OK)==0)
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTw: 
             {
                 if(access(path_more,W_OK)==0)
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTx: 
             {
                 if(access(path_more,X_OK)==0)
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTe: 
             {
-                return FEXIST;
+                return 0;
             }
             case TESTh: case TESTL:
             {
                 if(S_ISLNK(dir_info.st_mode))
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTc: 
             {
                 if(S_ISCHR(dir_info.st_mode))
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTb: 
             {
                 if(S_ISBLK(dir_info.st_mode))
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
             }
             case TESTp: 
             {
                 if(S_ISFIFO(dir_info.st_mode))
                 {
-                    return FEXIST;
+                    return 0;
                 }
                 else{
-                    return FNOTEXIST;
+                    return 1;
                 }
 
             }
             default: 
             {
                 perror("Test: Parameters are not supported.");
-                return FNOTEXIST;
+                return 1;
             }
         }
     }
@@ -637,7 +783,6 @@ short test_file(char*filename,int flag)
 
 short exec_test(char**para)
 {
-    printf("111111 %s %s",para[0],para[1]);
     if(para[0][0]=='-')
     {
         //printf("in")
@@ -687,7 +832,217 @@ short exec_test(char**para)
             default: 
             {
                 perror("Test: Parameters are not supported.");
-                return FNOTEXIST;
+                return 1;
+            }
+        }
+    }
+    else{
+        if(para[1][0]=='-')
+        {
+            if(strcmp(para[1],"-le")==0)
+            {
+                return test_logic(para[0],para[2],TESTle);
+            }
+            else if(strcmp(para[1],"-lt")==0)
+            {
+                return test_logic(para[0],para[2],TESTlt);
+            }
+            else if(strcmp(para[1],"-ge")==0)
+            {
+                return test_logic(para[0],para[2],TESTge);
+            }
+            else if(strcmp(para[1],"-gt")==0)
+            {
+                return test_logic(para[0],para[2],TESTgt);
+            }
+            else if(strcmp(para[1],"-eq")==0)
+            {
+                return test_logic(para[0],para[2],TESTeq);
+            }
+            else if(strcmp(para[1],"-ne")==0)
+            {
+                return test_logic(para[0],para[2],TESTne);
+            }
+            else{
+                perror("test: Can't recognize the parameter.");
+                return 2;
+            }
+        }
+        else if(strcmp(para[1],"<")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])<0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else if(strcmp(para[1],"<=")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])<=0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else if(strcmp(para[1],">")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])>0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else if(strcmp(para[1],">=")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])>=0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else if(strcmp(para[1],"==")==0||strcmp(para[1],"=")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])==0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else if(strcmp(para[1],"!=")==0)
+        {
+            if(para[0]==NULL||para[2]==NULL)
+            {
+                perror("test: Parameters error.");
+                return 2;
+            }
+            else{
+                if(strcmp(para[0],para[2])!=0)
+                {
+                    return 0;
+                }
+                else{
+                    return 1;
+                }
+            }
+        }
+        else{
+            perror("test: Can't recognize the parameters.");
+            return 2;
+        }
+    }
+}
+short test_num(char*a)
+{
+    if(a==NULL)
+    {
+        return 1;
+    }
+    int i=0;
+    if(a[0]=='-'||a[0]=='+')
+    {
+        i++;
+    }
+    int len=strlen(a);
+    for(;i<len;i++)
+    {
+        if(a[i]>='0'&&a[i]<='9')
+        {
+            continue;
+        }
+        else{
+            return 1;
+        }
+    }
+    return 0;
+}
+
+short test_logic(char*a,char*b,int flag)
+{
+    if(a==NULL||b==NULL)
+    {
+        return 2;//error
+    }
+    else{
+        if(test_num(a)||test_num(b))
+        {
+            return 2;//error
+        }
+        int num1=atoi(a);
+        int num2=atoi(b);
+        switch(flag)
+        {
+            case TESTle: 
+            {
+                return num1<=num2?0:1;
+            }
+            case TESTlt: 
+            {
+                return num1<num2?0:1;
+            }
+            case TESTge: 
+            {
+                return num1>=num2?0:1;
+            }
+            case TESTgt: 
+            {
+                return num1>num2?0:1;
+            }
+            case TESTeq: 
+            {
+                return num1==num2?0:1;
+            }
+            case TESTne: 
+            {
+                return num1!=num2?0:1;
+            }
+            default: 
+            {
+                return 2;
             }
         }
     }
@@ -710,11 +1065,11 @@ short exec_set(char**parameters)
     }
     else if(parameters[1]==NULL)
     {
-        return setenv(parameters[0],"NULL",0);
+        return setenv(parameters[0],"NULL",1);
     }
     else
     {
-        return setenv(parameters[0],parameters[1],0);
+        return setenv(parameters[0],parameters[1],1);
     }
 }
 
@@ -724,7 +1079,7 @@ short exec_unset(char**parameters)
     {
         return unsetenv(parameters[0]);
     }
-    return -1;
+    return 1;
 }
 
 short exec_umask(char**parameters)
@@ -753,17 +1108,32 @@ short exec_time()
     printf("%s",asctime(time_now));
     return 0;
 }
-short exec_bg()
+short exec_bg(pid_t bpid)
 {
     pro_node*p=processlist;
+    short listall=1;
+    if(bpid==-1)
+    {
+        listall=1;
+    }
+    else{
+        listall=0;
+    }
     while(p->next!=NULL)
     {
-        //readinfo(p->next);
-        if(p->next->status==STOP)
+        if( p->next->status==STOP )
         {
+            if(listall==0&&p->next->pid!=bpid)
+            {
+                continue;
+            }
             pid_t pid=p->next->pid;
             kill(pid,SIGCONT);
             p->next->status=RUNNING;
+            if(listall==0)
+            {
+                return 0;
+            }
         }
         if(p->next!=NULL)
             p=p->next;
@@ -771,30 +1141,35 @@ short exec_bg()
     return 0;
 }
 
-short exec_fg()
+short exec_fg(pid_t fpid)
 {
-    //waitpid(processlist->next->pid,NULL,0);
-    //return 0;
-    printf("IN FG\n");
     DIR*dir;
     pro_node*p=processlist;
+    short listall=1;
+    if(fpid==-1)
+    {
+        listall=1;
+    }
+    else{
+        listall=0;
+    }
     while(p->next!=NULL)
     {
-        //readinfo(p->next);
         if(p->next->status==RUNNING)
         {
+            if(listall==0&&p->next->pid!=fpid)
+            {
+                continue;
+            }
             for(int i=0;i<MAXPID;i++)
             {
                 if(PIDTABLE[i]==p->next->pid)
                 {
-                    //printf("ooooooo\n");
-                    //waitpid(PIDTABLE[i],NULL,0);
                     PIDTABLE[i]=0;
                     break;
                 }
             }
-            printf("pid3:%d\n",getpid());
-            printf("%s\n",p->next->command);
+            printf("pid :%d command: %s\n",fpid,p->next->command);
             pid_t pid=p->next->pid;
 
             pro_node*pt=p->next;
@@ -806,7 +1181,10 @@ short exec_fg()
             fgpid=pid;
             waitpid(pid,NULL,WUNTRACED);
             fgpid=-1;
-
+            if(listall==0)
+            {
+                return 0;
+            }
         }
         if(p->next!=NULL)
             p=p->next;
@@ -941,9 +1319,10 @@ void readinfo(struct process_info*p)
     }
 }
 
-void clear()
+short clear()
 {
     printf("\033[1H\033[2J");
+    return 0;
 }
 
 short exec_dir(char**parameters)
@@ -967,7 +1346,7 @@ short exec_dir(char**parameters)
         {
             if(cntdir==MAXDIRLIST)
             {
-                perror("dir:Dirs are too many!");
+                perror("dir: Dirs are too many.");
                 return 2;//level 2 error unable to use parameters
             }
             else{
@@ -989,7 +1368,6 @@ short exec_dir(char**parameters)
                 }
                 else{
                     perror("dir:Unknow parameters");
-                    //printf("iiiiiiiiii\n");
                     return 2;
                 }
             }
@@ -1000,9 +1378,8 @@ short exec_dir(char**parameters)
     {
         dir[cntdir++]=(char*)malloc(sizeof(char)*1000);
         getcwd(dir[cntdir-1],1000);
-        //printf("%s*******",dir[cntdir-1]);
     }
-    //printf("%s*******",dir[cntdir-1]);
+    
     for(int i=0;i<cntdir;i++)
     {
         path_dir=NULL;
@@ -1036,16 +1413,12 @@ short exec_dir(char**parameters)
                     path_dir[cnt++]='/';
                     path_dir[cnt]='\0';
                 }
-                printf("FFFFUUUUU %s %d \n",path_dir,flag);
                 exec_display(path_dir,flag);
             }
             else{
                 exec_displayfile(path_dir,flag);
             }
         }
-
-        
-        
         free(path_dir);
     }
     for(int i=0;i<cntdir;i++)
@@ -1053,6 +1426,7 @@ short exec_dir(char**parameters)
         free(dir[i]);
     }
     free(dir);
+    return 0;
     
 }
 int cmp(const void*a,const void*b)
@@ -1062,6 +1436,7 @@ int cmp(const void*a,const void*b)
 
 short exec_display(char*dir,int flag)
 {
+    
     DIR* dopen=NULL;
     struct dirent* dinfo=NULL;
     int cntfile=0;
@@ -1093,30 +1468,20 @@ short exec_display(char*dir,int flag)
         filenames[cntfile]=(char*)malloc(sizeof(char)*(strlen(dinfo->d_name)+5));
         strcpy(filenames[cntfile],dinfo->d_name);
         maxsize=max(maxsize,strlen(dinfo->d_name));
-        //printf("%s\n",filenames[cntfile]);
         cntfile++;
     }
     char* temp;
-    //qsort(filenames,cntfile,sizeof(char*),cmp);
     for (int i = 0; i < cntfile - 1; i++)
         for (int j = 0; j < cntfile - 1 - i; j++) {
             if ( strcmp(filenames[j], filenames[j + 1]) > 0 ) {
                 temp=filenames[j+1];
                 filenames[j+1]=filenames[j];
                 filenames[j]=temp;
-                //strcpy(temp, filenames[j + 1]);
-                /*temp[strlen(filenames[j + 1])] = '\0';
-                strcpy(filenames[j + 1], filenames[j]);
-                filenames[j + 1][strlen(filenames[j])] = '\0';
-                strcpy(filenames[j], temp);
-                filenames[j][strlen(temp)] = '\0';*/
             }
         }
-    //free(temp);
     buf=(char*)malloc(sizeof(char)*(strlen(dir) + maxsize + 5));
     strcpy(buf,dir);
     const int base_size=strlen(dir);
-    //printf("&&&&&&&&%d\n",cntfile);
     unsigned long long sizeall=0;
     for(int i=0;i<cntfile;i++)
     {
@@ -1126,8 +1491,12 @@ short exec_display(char*dir,int flag)
             continue;
         }
         else{
+            
             int re=exec_displayfile(buf,flag);
-            //printf("%d\n",re);
+            if(re==-1)
+            {
+                continue;
+            }
             sizeall+=((re/4096) + (((re%4096)?1:0) ))*4;
         }
     }
@@ -1147,7 +1516,6 @@ short exec_display(char*dir,int flag)
 
 int exec_displayfile(char*file,int flag)
 {
-    //printf("!!!!!!!!!%s %d\n",file,flag);
     struct stat buf;
     char*name=NULL;
     name=(char*)malloc(sizeof(char)*(strlen(file)+5));
@@ -1158,20 +1526,17 @@ int exec_displayfile(char*file,int flag)
             strcpy(name,file+i+1);break;
         }
     }
-    //printf("name:%s\n",name);
     if(lstat(file,&buf)==-1)
     {
-        printf("OOOOOOOO\n");
         perr("dir: File %s can't be found.",file);
 
-        return 1;//level 1
+        return -1;//level 1
     }
     switch(flag & 3)
     {
         
         case PARA_NONE:case PARA_a:
         {
-            //printf("NONE %d\n",flag);
             if(row_left>=strlen(name))
             {
                 row_left-=strlen(name);
@@ -1186,7 +1551,7 @@ int exec_displayfile(char*file,int flag)
         }
         case PARA_l: case PARA_a|PARA_l:
         {
-            //printf("L\n");
+            
             if (S_ISLNK(buf.st_mode))
                 printf("l");
             else if (S_ISREG(buf.st_mode))
@@ -1231,12 +1596,11 @@ int exec_displayfile(char*file,int flag)
         }
         default:
         {
-            printf("DEFAULT %d\n",flag);
+            
             break;
         }
 
     }
-    //printf("%lu %lu\n",buf.st_blksize,buf.st_blocks);
     return buf.st_size;
 }
 
@@ -1246,7 +1610,7 @@ short exec_pwd()
     getcwd(buf,1000);
     printf("%s\n",buf);
     free(buf);
-    return 1;
+    return 0;
 }
 
 short set_path(char*dir)
@@ -1254,7 +1618,7 @@ short set_path(char*dir)
     char*path_cd=NULL;
     if(strlen(dir)<=0)
     {
-        return 0;
+        return 1;
     }
     if(dir[0]=='~')
     {

@@ -1,20 +1,18 @@
 #include "myhead.h"
 
-int read_command()
+int read_command(FILE*stream)
 {
-    char* re=fgets(buf,BUFFSIZE,stdin);
+    char* re=fgets(buf,BUFFSIZE,stream);
     if(re==NULL)
     {
         puts("");
-        return 0;
+        return -2;//EOF
     }
     if(buf[0]=='\0')
     {
         return -1;
     }
-
     return parse_input();
-    return 0;
 }
 int parse_input()
 {
@@ -44,6 +42,10 @@ int parse_input()
         {
             in_string=1;
             p_end++;
+            if(*p_end=='\n')
+            {
+                return -1;
+            }
         }
         if(in_string)
         {
@@ -52,9 +54,12 @@ int parse_input()
                 if(*p_end=='\"')
                 {
                     in_string=0;p_end++;
-                    if(*p_end!=' '||*p_end!='\n')
+                    if(*p_end!=' '&&*p_end!='\n')
                     {
-                        return -1;//error
+                        while(*p_end!=' '&&*p_end!='\n')
+                        {
+                            p_end++;
+                        }
                     }
                     else{
                         if(*p_end==' ')
@@ -90,11 +95,9 @@ short parsing(int n)
     int cnt=0;
     init_parse_info(&infolist);
     init_info_node(&(infolist->info));
-    //printf("@@@@@@%d\n",infolist->info->cnt);
     struct info_node*p=infolist->info;
     for(int i=0;i<n;i++)
     {
-        //printf("^^^^:%d %s\n",i,parameters[i]);
         if(!in)
         {
             p->command=parameters[i];

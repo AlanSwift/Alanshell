@@ -21,7 +21,7 @@
 #include "myavl.h"
 #include <ctype.h>
 
-#define _debug
+//#define _debug
 
 
 /********parameter declare*****/
@@ -48,8 +48,10 @@ struct process_info *processlist;
 struct process_info *currentprocess;
 
 /*********function declare*****/
+void file_loop(int argc,char**);
+void main_loop(char**);
 void input_prompt();
-int read_command();
+int read_command(FILE*stream);
 int init();
 int parse_input();
 void init_parse_info(struct parse_info**p);
@@ -69,18 +71,18 @@ int exec_displayfile(char*,int flag);
 void perr(char*,char*);
 int getmaxrow();
 
-void clear();
+short clear();
 void process_node_init(struct process_info**);
 void list_jobs(char**);
 void readinfo(struct process_info*);
 short iszombis(pid_t pid);
 void cleanprocess();
-short exec_fg();
+short exec_fg(pid_t);
 void ctrl_z(int sig);
 void addpid(pid_t,struct info_node*p,int state);
 void changestate(pid_t);
 void getname(struct info_node*p);
-short exec_bg();
+short exec_bg(pid_t);
 short exec_time();
 short exec_umask(char**);
 short exec_environ();
@@ -89,10 +91,16 @@ short exec_unset(char**);
 short exec_test(char**);
 short test_dir(char*filename);
 short test_file(char*filename,int flag);
+short test_logic(char*a,char*b,int flag);
 void init_environment(int argc,char**argv);
 short exec_shift(char **);
 short exec_echo(char**);
 char* replace_string(char*);
+short test_num(char*);
+short exec_help();
+short exec_continue();
+short exec_declare(char**);
+short exec_let(char**);
 
 
 /********color defination******/
@@ -129,12 +137,16 @@ char* replace_string(char*);
 #define FINISH 4
 #define NONSENSE 0
 #define ZOMBIS 3
+#define DO_LET 95
+#define DO_DECLARE 96
 #define DO_JOBS 97
 #define DO_UNSET 98
 #define DO_SET 99
 #define DO_FG 100
 #define DO_BG 101
 #define DO_SHIFT 102
+#define DO_EXIT 103
+#define DO_CONTINUE 104
 #define TESTr 0
 #define TESTw 1
 #define TESTx 2
@@ -146,6 +158,14 @@ char* replace_string(char*);
 #define TESTc 8
 #define TESTb 9
 #define TESTp 10
+#define TESTle 11
+#define TESTlt 12
+#define TESTge 13
+#define TESTgt 14
+#define TESTeq 15
+#define TESTne 16
+
+
 #define FEXIST 0
 #define FNOTEXIST 1
 //#endif
