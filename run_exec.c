@@ -1,19 +1,49 @@
 #include "myhead.h"
 
-
 short run_exec(struct info_node*p)
 {
     int status=0;//0 is ok, 1 is slight error, 2 is serious error
     int temp_fd=0;
     struct info_node*ptr=NULL;
     int laststatus=0;
+    int input_fd;
+    int output_fd;
+
     for(ptr=p;ptr!=NULL;ptr=ptr->next)
     {
+        if(ptr->input_direct_append||ptr->input_direct_noappend)
+        {
+            input_fd=open(ptr->inputfile,O_CREAT |O_RDONLY, 0666);
+        }
+        else{
+            input_fd=temp_fd;
+        }
+
+        if(ptr->output_direct_append)
+        {
+            output_fd=open(ptr->outputfile,O_WRONLY|O_CREAT|O_APPEND, 0666);
+        }
+        else if(ptr->output_direct_noappend)
+        {
+            output_fd=open(ptr->outputfile,O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        }
+        
         if(ptr->next)
         {
             int fd[2];
             pipe(fd);
-            int re=run_single(ptr,temp_fd,fd[1]);
+            if(ptr->output_direct_append||ptr->output_direct_noappend)
+            {
+                ;
+            }
+            else if(ptr->piped)
+            {
+                output_fd=fd[1];
+            }
+            else{
+                output_fd=1;
+            }
+            int re=run_single(ptr,input_fd,output_fd);
             laststatus=re;
             temp_fd=fd[0];
             if(re==DO_EXIT)
@@ -26,7 +56,14 @@ short run_exec(struct info_node*p)
             }
         }
         else{
-            int re=run_single(ptr,temp_fd,1);
+            if(ptr->output_direct_append||ptr->output_direct_noappend)
+            {
+                ;
+            }
+            else{
+                output_fd=1;
+            }
+            int re=run_single(ptr,input_fd,output_fd);
             laststatus=re;
             if(re==DO_EXIT)
             {
@@ -38,7 +75,6 @@ short run_exec(struct info_node*p)
             }
         }
 
-        fflush(stdout);
     }
     char buf[65];
     sprintf(buf,"%d",laststatus);
@@ -82,6 +118,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
         exit(re);
     }
     else{
+        int restatus=0;
         signal(SIGTSTP,ctrl_z);
         signal(SIGCONT,SIG_DFL);
         if(infolist->background==1)
@@ -92,6 +129,8 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             fgpid=childpid;
             waitpid(childpid,&status,WUNTRACED);
             fgpid=-1;
+            
+            restatus=WEXITSTATUS(status);
             if(WEXITSTATUS(status)==DO_FG)
             {
                 if(p->paramaters[1]==NULL)
@@ -176,7 +215,9 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
             {
                 return exec_let((p->paramaters)+1);
             }
-            return WEXITSTATUS(status);
+            else{
+                restatus=WEXITSTATUS(status);
+            }
         }
 
         if(in_fd!=0)
@@ -187,6 +228,7 @@ int run_single(struct info_node*p,int in_fd,int out_fd)
         {
             close(out_fd);
         }
+        return restatus;
     }
     return 0;
 }

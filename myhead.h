@@ -24,13 +24,13 @@
 //#define _debug
 
 
-/********parameter declare*****/
-char *buf;
-char**parameters;
-extern const int MAXLINE;
-extern const int BUFFSIZE;
-extern const int MAXPARA;
-extern const int MAXPID;
+/********variables declare*****/
+char *buf;//input buffer
+char**parameters;//input parameters for parse
+extern const int MAXLINE;//Maxline
+extern const int BUFFSIZE;//the max size of input buffer
+extern const int MAXPARA;//max number of parameters
+extern const int MAXPID;//max number of background processes
 extern const int MAXDIRLIST;
 extern char*internal_list[100];
 extern int row_left;
@@ -46,8 +46,9 @@ struct parse_info *infolist;
 struct process_info;
 struct process_info *processlist;
 struct process_info *currentprocess;
+/******variables declare end****/
 
-/*********function declare*****/
+/*********function declare******/
 void file_loop(int argc,char**);
 void main_loop(char**);
 void input_prompt();
@@ -121,22 +122,27 @@ short exec_let(char**);
 #define YELLOW       "\033[1;33m"
 #define LIGHT_GRAY   "\033[0;37m"
 #define WHITE        "\033[1;37m"
+/*****color defination end******/
 
-/*******hong*************/
-/*******for dir**********/
+
+/*******define options**********/
 #define PARA_NONE 0
-#define PARA_a 1
-#define PARA_l 2
+#define PARA_a 1 //-a
+#define PARA_l 2 //-l
 
 
-//#ifndef __cplusplus
 #define true 1
 #define false 0
+
+/******define status*****/
 #define RUNNING 1
 #define STOP 2
 #define FINISH 4
 #define NONSENSE 0
 #define ZOMBIS 3
+/**status defination end**/
+
+/****define exit code*****/
 #define DO_LET 95
 #define DO_DECLARE 96
 #define DO_JOBS 97
@@ -147,6 +153,10 @@ short exec_let(char**);
 #define DO_SHIFT 102
 #define DO_EXIT 103
 #define DO_CONTINUE 104
+/**exit code defination end**/
+
+/***********for test*****/
+/*********test files*****/
 #define TESTr 0
 #define TESTw 1
 #define TESTx 2
@@ -158,41 +168,44 @@ short exec_let(char**);
 #define TESTc 8
 #define TESTb 9
 #define TESTp 10
+/********test logic******/
 #define TESTle 11
 #define TESTlt 12
 #define TESTge 13
 #define TESTgt 14
 #define TESTeq 15
 #define TESTne 16
+/******test end**********/
 
-
-#define FEXIST 0
-#define FNOTEXIST 1
-//#endif
-
+/******* this struct is used to store command's info*******/
 struct info_node{
-    char*command;
-    char**paramaters;
-    char*inputfile;
-    char*outputfile;
-    int cnt;
-    short input_direct_noappend;
-    short input_direct_append;
-    short output_direct_noappend;
-    short output_direct_append;
-    short piped;
-    struct info_node*next;
+    char*command;//command
+    char**paramaters;//the parameters like -la
+    char*inputfile;//input redirection's filename
+    char*outputfile;//output redirection's filename
+    int cnt;//the number of parameters
+    short input_direct_noappend;//flag: <
+    short input_direct_append;//flag: <<
+    short output_direct_noappend;//flag: >
+    short output_direct_append;//flag: >>
+    short piped;//whether has pipe
+    struct info_node*next;//next command
 };
+/*******************************end*************************/
 
+/****************one command********************************/
 struct parse_info{
-    struct info_node*info;
-    int background;
+    struct info_node*info;//command's info
+    int background;//whether it's in background
 };
-typedef struct process_info{
-    pid_t pid;
-    int status;
-    char*command;
-    struct process_info*next;
-}pro_node;
+/*****************************end***************************/
 
+/**************this struct is to store the process**********/
+typedef struct process_info{
+    pid_t pid;//pid
+    int status;//status:running ect
+    char*command;//command
+    struct process_info*next;//next process
+}pro_node;
+/******************************end**************************/
 #endif

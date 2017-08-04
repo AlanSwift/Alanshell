@@ -2,6 +2,8 @@ A mini-shell written by Alan(name: 沈锴, ID: 3150102098, email: shenkai200861@
 The commands followed are all built-in commands. Some commands are not fully implemented due to limited time. I will finish them later.
 All commands will exit with 0 being successful and others having errors if not declared specially.
 
+This shell supports pipes and file redirections. But you should splite them by blank spaces. eg: ls -l | wc -l > 1.txt
+
 1. cd [path]. Change directory. You will change to your main directory if the path parameter is omitted.
         The path will be an absolute path or relative path. '~' is legal which represent main directory.
 
