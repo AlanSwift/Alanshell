@@ -266,7 +266,7 @@ short run_command(char* command,char**para)
     }
     else if(re==13)//exec
     {
-        return execvp(command,para);
+        return execvp(para[1],para+1);
     }
     else if(re==14)//test
     {

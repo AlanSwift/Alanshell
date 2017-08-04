@@ -1,1 +1,77 @@
-writen by alan
+A mini-shell written by Alan(name: 沈锴, ID: 3150102098, email: shenkai200861@gmail.com). Version: 1.0
+The commands followed are all built-in commands. Some commands are not fully implemented due to limited time. I will finish them later.
+All commands will exit with 0 being successful and others having errors if not declared specially.
+
+1. cd [path]. Change directory. You will change to your main directory if the path parameter is omitted.
+        The path will be an absolute path or relative path. '~' is legal which represent main directory.
+
+2. pwd. Print your working directory. 
+3. exit. Exit the mini-shell. It will exit will an code(103) if successful. Others represent errors.
+4. dir [-option] [path]. A builtin command likes 'ls'.
+        options: -l: List the files in detail. Just like 'ls -l'.
+                 -a: List the hided files. Just like 'ls -a'.
+                 Options can be used in combination.
+        path: It represents the directory or file you want to list.
+              Absolute or relative path are both supported.
+              You will list the current directory if path parameter is omitted.
+5. clear. It will clear the cmd.
+6. jobs. It will list all commands in background.
+7. fg [pid]. It will make the command which PID is pid run in foreground.
+        It will make all command in background to foreground if pid is omitted.
+8. bg [pid]. It will make the command stopped which PID is pid run in background.
+        It will make all command stopped if pid is omitted.
+9. time. It will print the time now.
+10. umask [mode]. It will change the umask value if mode is given.
+        If mode is not given, it will print the umask value now.
+11. environ. It will print all environment value.
+12 set [name] [value]. It will set the value in environment.
+        If name or value are both omitted, it will list all environment value. Just like 'environ'.
+        If value is omitted, the value will be set as 'NULL'.
+        If name exists, the value will be overwritten.
+13. unset [name]. Unset the variable named after 'name' in environment.
+        If name is omitted, it will return an error code.
+14. exec. It will execute the external command.
+15. test [expression]. It will do the test the expression.
+        Expression only suppports three class.
+            1. [option] [file's path]. test the property of the file.
+                options: -d: test if the file exists and is a directory.
+                         -r: test if the file exists and readable.
+                         -w: test if the file exists and writeable.
+                         -x: test if the file exists and executable.
+                         -e: test if the file exists.
+                         -L: test if the file exists and is a symbolic link.
+                         -h: the same as '-L'.
+                         -p: test if the file exists and is a pipe.
+                         -f: test if the file exists and is a formal file.
+                         -r: test if the file exists and is a character device file.
+                         -b: test if the file exists and is a block device file.
+                file's path: an absolute path or relative path. '~' represents the main directory.
+            2. [number1] [option] [number2]. Comparasion between two numbers.
+                option: -le: test if number1 <= number2.
+                        -lt: test if number1 <  number2.
+                        -ge: test if number1 >= number2.
+                        -gt: test if number1 >  number2.
+                        -eq: test if number1 == number2.
+                        -ne: test if number1 != number2.
+            3. [string1] [option] [string2]. Comparasion between two strings.
+                option: > : test if string1 is larger than string2 in alphabet order.
+                        >=: test if string1 is larger or equal than string2 in alphabet order.
+                        < : test if string1 is smaller than string2 in alphabet order.
+                        <=: test if string1 is smaller or equal than string2 in alphabet order.
+                        ==: test if string1 is equal to string2 in alphabet order.
+                        !=: test if string1 is not equal to string2 in alphabet order.
+16. shift [number]. Shift the $1-9.
+        number: If it is negative, the shift command will return an error code.
+                For example, if number is 1, then $1 will be $2, and so on.
+                If number is omitted, the command will do 'shift 1'.
+17. echo [expressions]. Print the expressions.
+        Expressions: the character followed '$' before an blank space or tabulation symbol will be regarded as variable. So they will be replaced.
+                You can put the variable in '{}'. But it doesn't support nested replacement.
+                If you don't want any replacements, you can put the expression in '''(single quote mark).
+18. help. This command will print this file.
+19. continue. It will return an special code.
+20. declare [name]. This command support valuables declaration. It doesn't support declare array.
+        This command is not necessary. You can use valuables without declaration.
+        They are not environment valuables. They are stored in an AVL tree.
+21. let [expression]. This command support caculation. Now it only support assignments.
+        expression: The operators and operands should be seperated by blank spaces.
